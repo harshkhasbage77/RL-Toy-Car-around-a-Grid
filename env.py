@@ -3,11 +3,11 @@ import math
 import time
 
 class Environment:
-    def __init__(self, grid_size=8, cell_size=70):
+    def __init__(self, grid_size=30, cell_size=20):
         self.grid_size = grid_size
         self.cell_size = cell_size
         self.window_size = (grid_size * cell_size, grid_size * cell_size+50)
-        self.car_x, self.car_y = 0, grid_size - 1
+        self.car_x, self.car_y = grid_size // 2, 2 * grid_size // 3 
         self.car_direction = 'up'
         self.goal = (grid_size - 1, 0)
         self.screen = pygame.display.set_mode(self.window_size)
@@ -16,11 +16,47 @@ class Environment:
         self.last_reward = 0
         self.last_done = False
 
+    def _get_radar_signals(self):
+        """Calculates radar signals (1 or 0) based on whether obstacles are in each direction."""
+        radar_signals = [0, 0, 0, 0]  # Signals for [Up, Down, Left, Right]
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # (delta_y, delta_x)
+
+        for i, direction in enumerate(directions):
+            next_y = self.car_y + direction[0]
+            next_x = self.car_x + direction[1]
+
+            if next_x < 0 or next_x >= self.grid_size or next_y < 0 or next_y >= self.grid_size:
+                radar_signals[i] = 0  # Obstacle (boundary) detected
+            else:
+                radar_signals[i] = 1  # No obstacle detected
+
+        return radar_signals
+
+    def draw_grid_with_circular_path(self):
+        center_x, center_y = self.grid_size // 2, self.grid_size // 2  # Center of the grid
+        radius = self.grid_size // 3  # Adjust the radius to control the size of the circular path
+        
+        for row in range(self.grid_size):
+            for col in range(self.grid_size):
+                # Default grid color
+                pygame.draw.rect(self.screen, (230, 230, 250), (col * self.cell_size, row * self.cell_size, self.cell_size, self.cell_size), 1)
+                
+                # Calculate the distance from the current cell to the center of the grid
+                distance = math.sqrt((col - center_x) ** 2 + (row - center_y) ** 2)
+                
+                # If the cell is within the circular path (with some tolerance for grid fitting)
+                if radius - 1 <= distance <= radius + 1:
+                    pygame.draw.rect(self.screen, (139, 69, 19), (col * self.cell_size, row * self.cell_size, self.cell_size, self.cell_size))
+
     def reset(self):
-        self.car_x, self.car_y = 0, self.grid_size - 1
+        """Resets the environment to the initial state and returns the state and radar signals."""
+        # self.car_x, self.car_y = 0, self.grid_size
+        self.car_x, self.car_y = self.grid_size // 2, 5 * self.grid_size // 6 + 1
         self.car_direction = 'up'
+        # radar_signals = self._get_radar_signals()
 
     def step(self, action):
+        """Updates the car position based on the action and returns the next state and radar signals."""
         self.last_action = action
         if action == 'forward':
             if self.car_direction == 'up':
@@ -51,9 +87,24 @@ class Environment:
                 self.car_direction = 'down'
             elif self.car_direction == 'right':
                 self.car_direction = 'up'
+
+        radar_signals = self._get_radar_signals()  # Get radar signals after taking the action
         
-        isOnPath = (self.car_y == 0 and self.car_x == self.grid_size - 1) or (self.car_x == self.grid_size - 2) or (self.car_y == self.grid_size - 1 and self.car_x != self.grid_size - 1)
+        # isOnPath = (self.car_y == 0 and self.car_x == self.grid_size - 1) or (self.car_x == self.grid_size - 2) or (self.car_y == self.grid_size - 1 and self.car_x != self.grid_size - 1)
         
+        # We need to define a circular isOnPath condition
+
+        # Center of the grid
+        center_x, center_y = self.grid_size // 2, self.grid_size // 2
+        # Radius for the circular path
+        radius = self.grid_size // 3
+
+        # Calculate the distance from the car's current position to the center of the grid
+        distance_from_center = math.sqrt((self.car_x - center_x) ** 2 + (self.car_y - center_y) ** 2)
+
+        # Determine if the car is on the circular path
+        isOnPath = (radius - 1 <= distance_from_center <= radius + 1)
+
         if (self.car_x, self.car_y) == self.goal:
             reward = 10
             done = True
@@ -83,8 +134,9 @@ class Environment:
         for row in range(self.grid_size):
             for col in range(self.grid_size):
                 pygame.draw.rect(self.screen, (230, 230, 250), (col * self.cell_size, row * self.cell_size, self.cell_size, self.cell_size), 1)
-                if (row == 0 and col == self.grid_size - 1) or (col == self.grid_size - 2) or (row == self.grid_size - 1 and col != self.grid_size - 1):
-                    pygame.draw.rect(self.screen, (139, 69, 19), (col * self.cell_size, row * self.cell_size, self.cell_size, self.cell_size))
+                # if (row == 0 and col == self.grid_size - 1) or (col == self.grid_size - 2) or (row == self.grid_size - 1 and col != self.grid_size - 1):
+                #     pygame.draw.rect(self.screen, (139, 69, 19), (col * self.cell_size, row * self.cell_size, self.cell_size, self.cell_size))
+        env.draw_grid_with_circular_path()
 
         car_center = (self.car_x * self.cell_size + self.cell_size // 2, self.car_y * self.cell_size + self.cell_size // 2)
         car_side_length = self.cell_size // 2
@@ -127,7 +179,7 @@ env = Environment()
 # Example of using the environment
 state = env.reset()
 env.render()
-for _ in range(2):
+for _ in range(7):
     action = 'forward'
     next_state, reward, done, _ = env.step(action)
     env.render()
@@ -135,8 +187,9 @@ for _ in range(2):
 next_state, reward, done, _ = env.step('right')
 env.render()
 
-for _ in range(10):
+for i in range(10):
     action = 'forward'
+    # print(i)
     next_state, reward, done, _ = env.step(action)
     env.render()
 
